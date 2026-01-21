@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Text Diff</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body class="dark-mode">
+    <div class="app-container">
+        <header>
+            <h1>Text Diff Tool</h1>
+            <div class="controls">
+                <button id="compareBtn">Compare</button>
+                <button id="backBtn" class="hidden">Back to Edit</button>
+                <button id="clearBtn" class="secondary">Clear</button>
+            </div>
+        </header>
+
+        <div class="split-view">
+            <div class="pane left-pane" id="dropZoneLeft">
+                <div class="pane-header">Original Text</div>
+                <textarea id="inputLeft" placeholder="Paste text or drag file here..."></textarea>
+                <input type="file" id="fileLeft" class="hidden-input">
+            </div>
+
+            <div class="pane right-pane" id="dropZoneRight">
+                <div class="pane-header">Changed Text</div>
+                <textarea id="inputRight" placeholder="Paste text or drag file here..."></textarea>
+                <input type="file" id="fileRight" class="hidden-input">
+            </div>
+        </div>
+
+        <div id="diffOutput" class="diff-output hidden"></div>
+    </div>
+
+    <script type="module" src="main.js"></script>
+</body>
+
+</html>

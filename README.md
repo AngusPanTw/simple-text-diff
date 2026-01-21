@@ -18,9 +18,19 @@ Simply open `offline_diff.html` in your browser. No installation or server requi
 
 ### Development (開發)
 If you want to modify the source code and rebuild:
-1. Install dependencies: `npm install`
-2. Start dev server: `npm run dev`
-3. (Note: The offline file is manually packaged from the source files when needed)
+1. Install dependencies (需先安裝 Node.js):
+   ```bash
+   npm install
+   ```
+2. Start dev server (預覽):
+   ```bash
+   npm run dev
+   ```
+3. **Build Offline File (生成單一離線檔案)**:
+   ```bash
+   npm run generate-offline
+   ```
+   (This will update `offline_diff.html` based on your changes)
 
 
 ## Privacy Note

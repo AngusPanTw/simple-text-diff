@@ -37,16 +37,22 @@ body {
 
 header {
     display: flex;
-    justify-content: space-between;
+    /* justify-content: space-between; Removed to allow centering */
+    justify-content: center;
     align-items: center;
     padding: 0.5rem 1rem;
     background-color: var(--pane-bg);
     border-bottom: 1px solid var(--border-color);
+    position: relative;
+    /* Added for absolute positioning of title */
 }
 
 h1 {
     font-size: 1.2rem;
     margin: 0;
+    position: absolute;
+    /* Take out of flow to center buttons properly */
+    left: 1rem;
 }
 
 button {
@@ -126,19 +132,51 @@ textarea:focus {
 
 .diff-output {
     flex: 1;
-    overflow: auto;
-    padding: 20px;
+    overflow: hidden;
+    /* Changed to hidden to allow inner columns to scroll or flex */
     font-family: 'Consolas', 'Monaco', monospace;
     font-size: 14px;
     background-color: var(--bg-color);
-    white-space: pre-wrap;
-    /* display: none; Removed to allow .hidden class to control visibility */
+    display: flex;
+    flex-direction: column;
 }
 
-/* Inline Diff Styling */
+.diff-container {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+}
+
+.diff-col {
+    width: 50%;
+    min-height: 100%;
+    border-right: 1px solid var(--border-color);
+    padding-bottom: 20px;
+}
+
+.diff-col:last-child {
+    border-right: none;
+}
+
 .diff-line {
     display: block;
-    padding: 2px 4px;
+    min-height: 24px;
+    /* Fixed height for alignment */
+    line-height: 24px;
+    padding: 0 8px;
+    white-space: pre-wrap;
+    /* or pre, but pre-wrap handles long lines better. However, strict alignment needs pre or sync scrolling */
+    /* To ensure alignment, single line height must be strict? 
+       Actually user wants just side-by-side. Wrap might break alignment unless rows are flex.
+       Let's stick to pre-wrap but if lines wrap they might misalign. 
+       For simple text files, pre or pre-wrap with same content usually matches.
+       For strict diffs, usually `white-space: pre; overflow-x: auto;` is safer for alignment.
+    */
+    white-space: pre;
+    overflow-x: auto;
+    /* Allow horizontal scroll for long lines */
+    box-sizing: border-box;
 }
 
 .diff-added {
@@ -149,11 +187,54 @@ textarea:focus {
 .diff-removed {
     background-color: var(--danger-bg);
     color: var(--danger-text);
-    text-decoration: line-through;
+    /* Removed text-decoration: line-through per request */
+}
+
+.diff-empty {
+    background-color: transparent;
+    user-select: none;
+    /* Make empty lines unselectable maybe? */
+}
+
+.diff-header {
+    display: flex;
+    border-bottom: 1px solid var(--border-color);
+    background-color: var(--pane-bg);
+    font-size: 12px;
+    color: #888;
+}
+
+.diff-header-col {
+    width: 50%;
+    padding: 5px 10px;
+    border-right: 1px solid var(--border-color);
 }
 
 .hidden {
     display: none !important;
+}
+
+/* Highlight Styles */
+.diff-mod-left {
+    background-color: rgba(75, 26, 26, 0.5);
+    /* Less intense background for mod line */
+}
+
+.diff-mod-right {
+    background-color: rgba(30, 70, 32, 0.5);
+    /* Less intense background for mod line */
+}
+
+.diff-char-removed {
+    background-color: rgba(255, 0, 0, 0.5);
+    /* Darker red for chars */
+    text-decoration: none;
+    /* No strikethrough wanted */
+}
+
+.diff-char-added {
+    background-color: rgba(0, 255, 0, 0.5);
+    /* Darker green for chars */
 }
 </style>
 </head>
@@ -1932,7 +2013,7 @@ textarea:focus {
 
     </script>
     <script>
-    const { diffLines } = Diff;
+    const { diffLines, diffChars } = Diff;
 
 const inputLeft = document.getElementById('inputLeft');
 const inputRight = document.getElementById('inputRight');
@@ -2002,9 +2083,31 @@ setupDragDrop(dropZoneRight, inputRight);
 function readTextFile(file, inputElement) {
     const reader = new FileReader();
     reader.onload = (e) => {
-        inputElement.value = e.target.result;
+        const buffer = e.target.result;
+        let text = '';
+
+        // Try UTF-8 first
+        try {
+            const utf8Decoder = new TextDecoder('utf-8', { fatal: true });
+            text = utf8Decoder.decode(buffer);
+        } catch (e) {
+            // If UTF-8 fails, try BIG5
+            try {
+                const big5Decoder = new TextDecoder('big5');
+                text = big5Decoder.decode(buffer);
+                console.log('Decoded as BIG5');
+            } catch (e2) {
+                console.error('Decoding failed', e2);
+                text = 'Error: Could not decode file. Supported encodings: UTF-8, BIG5.';
+            }
+        }
+
+        inputElement.value = text;
+        // Trigger input event to ensure any listeners update
+        inputElement.dispatchEvent(new Event('input', { bubbles: true }));
     };
-    reader.readAsText(file);
+    // Read as ArrayBuffer allows us to handle raw bytes for decoding
+    reader.readAsArrayBuffer(file);
 }
 
 // --- Diff Logic ---
@@ -2013,37 +2116,125 @@ function performDiff() {
     const text1 = inputLeft.value;
     const text2 = inputRight.value;
 
-    // Use specific diff library function (lines, words, chars)
-    // Ideally lines is good for code/logs.
+    // Use diffLines for line-by-line comparison
+    // Note: newlineIsToken: true can help with finer granularity but simple diffLines is usually okay.
     const diff = diffLines(text1, text2);
 
-    // We can render this in a new overlay or replace the textareas.
-    // For a nice UI, let's create a "Result View" that overlays the editors.
-    // Or we can just print it to the bottom.
-
-    // Let's try to display it in the diffOutput div for now.
-    // Clear previous output
     diffOutput.innerHTML = '';
 
-    // Note: View toggling is handled in the event listener now
+    // Create Layout
+    const header = document.createElement('div');
+    header.className = 'diff-header';
+    header.innerHTML = `
+        <div class="diff-header-col">Original (${text1.length} chars)</div>
+        <div class="diff-header-col">Modified (${text2.length} chars)</div>
+    `;
+    diffOutput.appendChild(header);
 
-    const fragment = document.createDocumentFragment();
+    const container = document.createElement('div');
+    container.className = 'diff-container';
 
-    diff.forEach((part) => {
-        // green for additions, red for deletions
-        // grey for common parts
-        const color = part.added ? 'diff-added' :
-            part.removed ? 'diff-removed' : 'diff-common';
+    const leftCol = document.createElement('div');
+    leftCol.className = 'diff-col';
 
-        const span = document.createElement('span');
-        span.className = color;
-        span.appendChild(document.createTextNode(part.value));
-        fragment.appendChild(span);
+    const rightCol = document.createElement('div');
+    rightCol.className = 'diff-col';
+
+    container.appendChild(leftCol);
+    container.appendChild(rightCol);
+    diffOutput.appendChild(container);
+
+    let parts = [];
+
+    for (let i = 0; i < diff.length; i++) {
+        const part = diff[i];
+        let lines = part.value.split('\n');
+        if (lines.length > 1 && lines[lines.length - 1] === '') {
+            lines.pop();
+        }
+
+        if (part.added) {
+            lines.forEach(line => {
+                parts.push({ left: null, right: line, type: 'added' });
+            });
+        } else if (part.removed) {
+            if (i + 1 < diff.length && diff[i + 1].added) {
+                const nextPart = diff[i + 1];
+                const nextLines = nextPart.value.split('\n');
+                if (nextLines.length > 1 && nextLines[nextLines.length - 1] === '') {
+                    nextLines.pop();
+                }
+
+                const count = Math.max(lines.length, nextLines.length);
+                for (let j = 0; j < count; j++) {
+                    const l = lines[j] !== undefined ? lines[j] : null;
+                    const r = nextLines[j] !== undefined ? nextLines[j] : null;
+                    parts.push({ left: l, right: r, type: 'mod' });
+                }
+                i++;
+            } else {
+                lines.forEach(line => {
+                    parts.push({ left: line, right: null, type: 'removed' });
+                });
+            }
+        } else {
+            lines.forEach(line => {
+                parts.push({ left: line, right: line, type: 'common' });
+            });
+        }
+    }
+
+    parts.forEach(p => {
+        const lDiv = document.createElement('div');
+        lDiv.className = 'diff-line' + (p.type === 'removed' ? ' diff-removed' : p.type === 'mod' ? ' diff-mod-left' : '');
+
+        const rDiv = document.createElement('div');
+        rDiv.className = 'diff-line' + (p.type === 'added' ? ' diff-added' : p.type === 'mod' ? ' diff-mod-right' : '');
+
+        if (p.type === 'mod' && p.left !== null && p.right !== null) {
+            const charDiff = (typeof Diff !== 'undefined' && Diff.diffChars) ? Diff.diffChars(p.left, p.right) : diffChars(p.left, p.right);
+
+            lDiv.innerHTML = '';
+            rDiv.innerHTML = '';
+
+            charDiff.forEach(part => {
+                if (part.removed) {
+                    const span = document.createElement('span');
+                    span.className = 'diff-char-removed';
+                    span.textContent = part.value;
+                    lDiv.appendChild(span);
+                } else if (part.added) {
+                    const span = document.createElement('span');
+                    span.className = 'diff-char-added';
+                    span.textContent = part.value;
+                    rDiv.appendChild(span);
+                } else {
+                    lDiv.appendChild(document.createTextNode(part.value));
+                    rDiv.appendChild(document.createTextNode(part.value));
+                }
+            });
+
+        } else {
+            if (p.left === null) {
+                lDiv.classList.add('diff-empty');
+                lDiv.innerHTML = '&nbsp;';
+            } else {
+                lDiv.textContent = p.left || ' ';
+                if (p.left === '') lDiv.innerHTML = '&nbsp;';
+            }
+
+            if (p.right === null) {
+                rDiv.classList.add('diff-empty');
+                rDiv.innerHTML = '&nbsp;';
+            } else {
+                rDiv.textContent = p.right || ' ';
+                if (p.right === '') rDiv.innerHTML = '&nbsp;';
+            }
+        }
+
+        leftCol.appendChild(lDiv);
+        rightCol.appendChild(rDiv);
     });
-
-    diffOutput.appendChild(fragment);
-
-    // diffOutput.appendChild(fragment); // Removed duplicate
 }
 
     </script>

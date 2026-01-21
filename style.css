@@ -29,16 +29,22 @@ body {
 
 header {
     display: flex;
-    justify-content: space-between;
+    /* justify-content: space-between; Removed to allow centering */
+    justify-content: center;
     align-items: center;
     padding: 0.5rem 1rem;
     background-color: var(--pane-bg);
     border-bottom: 1px solid var(--border-color);
+    position: relative;
+    /* Added for absolute positioning of title */
 }
 
 h1 {
     font-size: 1.2rem;
     margin: 0;
+    position: absolute;
+    /* Take out of flow to center buttons properly */
+    left: 1rem;
 }
 
 button {
@@ -118,19 +124,51 @@ textarea:focus {
 
 .diff-output {
     flex: 1;
-    overflow: auto;
-    padding: 20px;
+    overflow: hidden;
+    /* Changed to hidden to allow inner columns to scroll or flex */
     font-family: 'Consolas', 'Monaco', monospace;
     font-size: 14px;
     background-color: var(--bg-color);
-    white-space: pre-wrap;
-    /* display: none; Removed to allow .hidden class to control visibility */
+    display: flex;
+    flex-direction: column;
 }
 
-/* Inline Diff Styling */
+.diff-container {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+}
+
+.diff-col {
+    width: 50%;
+    min-height: 100%;
+    border-right: 1px solid var(--border-color);
+    padding-bottom: 20px;
+}
+
+.diff-col:last-child {
+    border-right: none;
+}
+
 .diff-line {
     display: block;
-    padding: 2px 4px;
+    min-height: 24px;
+    /* Fixed height for alignment */
+    line-height: 24px;
+    padding: 0 8px;
+    white-space: pre-wrap;
+    /* or pre, but pre-wrap handles long lines better. However, strict alignment needs pre or sync scrolling */
+    /* To ensure alignment, single line height must be strict? 
+       Actually user wants just side-by-side. Wrap might break alignment unless rows are flex.
+       Let's stick to pre-wrap but if lines wrap they might misalign. 
+       For simple text files, pre or pre-wrap with same content usually matches.
+       For strict diffs, usually `white-space: pre; overflow-x: auto;` is safer for alignment.
+    */
+    white-space: pre;
+    overflow-x: auto;
+    /* Allow horizontal scroll for long lines */
+    box-sizing: border-box;
 }
 
 .diff-added {
@@ -141,9 +179,52 @@ textarea:focus {
 .diff-removed {
     background-color: var(--danger-bg);
     color: var(--danger-text);
-    text-decoration: line-through;
+    /* Removed text-decoration: line-through per request */
+}
+
+.diff-empty {
+    background-color: transparent;
+    user-select: none;
+    /* Make empty lines unselectable maybe? */
+}
+
+.diff-header {
+    display: flex;
+    border-bottom: 1px solid var(--border-color);
+    background-color: var(--pane-bg);
+    font-size: 12px;
+    color: #888;
+}
+
+.diff-header-col {
+    width: 50%;
+    padding: 5px 10px;
+    border-right: 1px solid var(--border-color);
 }
 
 .hidden {
     display: none !important;
+}
+
+/* Highlight Styles */
+.diff-mod-left {
+    background-color: rgba(75, 26, 26, 0.5);
+    /* Less intense background for mod line */
+}
+
+.diff-mod-right {
+    background-color: rgba(30, 70, 32, 0.5);
+    /* Less intense background for mod line */
+}
+
+.diff-char-removed {
+    background-color: rgba(255, 0, 0, 0.5);
+    /* Darker red for chars */
+    text-decoration: none;
+    /* No strikethrough wanted */
+}
+
+.diff-char-added {
+    background-color: rgba(0, 255, 0, 0.5);
+    /* Darker green for chars */
 }
